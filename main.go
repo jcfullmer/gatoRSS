@@ -21,7 +21,6 @@ func main() {
 	argInput := os.Args
 
 	cmd := Config.CreateCommand(argInput)
-	fmt.Println(cmd.Name)
 	err := cmds.Run(configState, cmd)
 	if err != nil {
 		fmt.Print(err)
