@@ -18,6 +18,7 @@ func main() {
 		Handlers: map[string]func(*Config.State, Config.Command) error{
 			"login":    Config.HandlerLogin,
 			"register": Config.HandlerRegister,
+			"reset":    Config.HandlerReset,
 		},
 	}
 	if len(os.Args) < 2 {

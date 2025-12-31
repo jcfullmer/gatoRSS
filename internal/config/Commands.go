@@ -2,6 +2,7 @@ package Config
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"time"
@@ -72,10 +73,14 @@ func HandlerLogin(s *State, cmd Command) error {
 	if len(cmd.Args) == 0 {
 		fmt.Print("a username is required")
 		os.Exit(1)
-		return fmt.Errorf("Please input a username to login.")
+	}
+	_, err := s.Db.GetUser(context.Background(), cmd.Args[0])
+	if err != nil {
+		fmt.Println("User doesn't exist")
+		os.Exit(1)
 	}
 	newName := cmd.Args[0]
-	err := s.Config.SetUser(newName)
+	err = s.Config.SetUser(newName)
 	if err != nil {
 		return err
 	}
@@ -87,19 +92,41 @@ func HandlerRegister(s *State, cmd Command) error {
 	if len(cmd.Args) == 0 {
 		return fmt.Errorf("Please input a name to register.")
 	}
-	dbUser := database.CreateUserParams{
-		ID:        uuid.New(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Name:      cmd.Args[0],
-	}
-	user, err := s.Db.CreateUser(context.Background(), dbUser)
-	if err != nil {
-		fmt.Println(err)
+	_, err := s.Db.GetUser(context.Background(), cmd.Args[0])
+	if err == sql.ErrNoRows {
+		dbUser := database.CreateUserParams{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Name:      cmd.Args[0],
+		}
+
+		user, err := s.Db.CreateUser(context.Background(), dbUser)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		Config.SetUser(*s.Config, dbUser.Name)
+		fmt.Println("the user was created")
+		fmt.Println(user)
+		return nil
+	} else if err != nil {
+		fmt.Println("an error occured when getting user")
+		os.Exit(1)
+	} else {
+		fmt.Println("user already exists")
 		os.Exit(1)
 	}
-	Config.SetUser(*s.Config, cmd.Name)
-	fmt.Println("the user was created")
-	fmt.Println(user)
+	return nil
+}
+
+func HandlerReset(s *State, _ Command) error {
+	err := s.Db.ResetUsers(context.Background())
+	if err != nil {
+		fmt.Printf("Error when resetting databse: %v", err)
+		os.Exit(1)
+	}
+	fmt.Println("Successfully reset database.")
+	os.Exit(0)
 	return nil
 }
