@@ -1,12 +1,18 @@
 package Config
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
+
+	"github.com/google/uuid"
+	database "github.com/jcfullmer/gatoRSS/internal/database"
 )
 
 type State struct {
-	config *Config
+	Db     *database.Queries
+	Config *Config
 }
 
 type Command struct {
@@ -20,10 +26,13 @@ type Commands struct {
 
 func GetState() (*State, error) {
 	config, err := Read()
+
 	if err != nil {
 		return &State{}, err
 	}
+
 	return &State{
+		nil,
 		&config,
 	}, nil
 }
@@ -31,7 +40,7 @@ func GetState() (*State, error) {
 func CreateCommand(args []string) Command {
 	name := args[1]
 	var argies []string
-	if len(args) >= 3 {
+	if len(args) >= 2 {
 		argies = args[2:]
 	}
 	return Command{
@@ -42,7 +51,7 @@ func CreateCommand(args []string) Command {
 
 func (c *Commands) Run(s *State, cmd Command) error {
 	if _, ok := c.Handlers[cmd.Name]; !ok {
-		return fmt.Errorf("command not found")
+		return fmt.Errorf("command %v not found", cmd.Name)
 	}
 	err := c.Handlers[cmd.Name](s, cmd)
 	if err != nil {
@@ -66,10 +75,31 @@ func HandlerLogin(s *State, cmd Command) error {
 		return fmt.Errorf("Please input a username to login.")
 	}
 	newName := cmd.Args[0]
-	err := s.config.SetUser(newName)
+	err := s.Config.SetUser(newName)
 	if err != nil {
 		return err
 	}
 	fmt.Print("The user has been set.")
+	return nil
+}
+
+func HandlerRegister(s *State, cmd Command) error {
+	if len(cmd.Args) == 0 {
+		return fmt.Errorf("Please input a name to register.")
+	}
+	dbUser := database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      cmd.Args[0],
+	}
+	user, err := s.Db.CreateUser(context.Background(), dbUser)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	Config.SetUser(*s.Config, cmd.Name)
+	fmt.Println("the user was created")
+	fmt.Println(user)
 	return nil
 }
