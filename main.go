@@ -19,6 +19,7 @@ func main() {
 			"login":    Config.HandlerLogin,
 			"register": Config.HandlerRegister,
 			"reset":    Config.HandlerReset,
+			"users":    Config.HandlerUsers,
 		},
 	}
 	if len(os.Args) < 2 {

@@ -130,3 +130,24 @@ func HandlerReset(s *State, _ Command) error {
 	os.Exit(0)
 	return nil
 }
+
+func HandlerUsers(s *State, _ Command) error {
+	list, err := s.Db.GetUsers(context.Background())
+	if err != nil {
+		fmt.Printf("Error when Getting users: %v\n", err)
+		os.Exit(1)
+	}
+	if len(list) == 0 {
+		fmt.Println("No users in database.")
+		os.Exit(1)
+	}
+	for _, user := range list {
+		if user == s.Config.CurrentUserName {
+			fmt.Printf("* %v (current)\n", user)
+			continue
+		}
+		fmt.Printf("* %v\n", user)
+	}
+	os.Exit(0)
+	return nil
+}
