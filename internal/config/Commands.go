@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	database "github.com/jcfullmer/gatoRSS/internal/database"
+	"github.com/jcfullmer/gatoRSS/internal/rss"
 )
 
 type State struct {
@@ -149,5 +150,17 @@ func HandlerUsers(s *State, _ Command) error {
 		fmt.Printf("* %v\n", user)
 	}
 	os.Exit(0)
+	return nil
+}
+
+func HandlerAgg(s *State, _ Command) error {
+	feedURL := "https://www.wagslane.dev/index.xml"
+	RSS, err := rss.FetchFeed(context.Background(), feedURL)
+	if err != nil {
+		fmt.Println("Error with FetchFeed func")
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(RSS)
 	return nil
 }
