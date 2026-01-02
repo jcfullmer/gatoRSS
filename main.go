@@ -21,6 +21,7 @@ func main() {
 			"reset":    Config.HandlerReset,
 			"users":    Config.HandlerUsers,
 			"agg":      Config.HandlerAgg,
+			"addfeed":  Config.HandlerAddFeed,
 		},
 	}
 	if len(os.Args) < 2 {

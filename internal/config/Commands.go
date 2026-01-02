@@ -164,3 +164,28 @@ func HandlerAgg(s *State, _ Command) error {
 	fmt.Println(RSS)
 	return nil
 }
+
+func HandlerAddFeed(s *State, cmd Command) error {
+	if len(cmd.Args) < 2 {
+		fmt.Println("not nough args, need name of feed and url")
+		os.Exit(1)
+	}
+	name := cmd.Args[0]
+	url := cmd.Args[1]
+
+	currentUser, err := s.Db.GetUser(context.Background(), s.Config.CurrentUserName)
+	if err != nil {
+		return err
+	}
+	feed := database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    currentUser.ID,
+	}
+	dbFeed, err := s.Db.CreateFeed(context.Background(), feed)
+	fmt.Println(dbFeed)
+	return nil
+}
