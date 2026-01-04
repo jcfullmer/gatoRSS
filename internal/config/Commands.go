@@ -28,7 +28,6 @@ type Commands struct {
 
 func GetState() (*State, error) {
 	config, err := Read()
-
 	if err != nil {
 		return &State{}, err
 	}
@@ -53,7 +52,7 @@ func CreateCommand(args []string) Command {
 
 func (c *Commands) Run(s *State, cmd Command) error {
 	if _, ok := c.Handlers[cmd.Name]; !ok {
-		return fmt.Errorf("command %v not found", cmd.Name)
+		return fmt.Errorf("command %v not found\n", cmd.Name)
 	}
 	err := c.Handlers[cmd.Name](s, cmd)
 	if err != nil {
@@ -72,20 +71,20 @@ func (c *Commands) Register(name string, f func(*State, Command) error) error {
 
 func HandlerLogin(s *State, cmd Command) error {
 	if len(cmd.Args) == 0 {
-		fmt.Print("a username is required")
+		fmt.Println("a username is required")
 		os.Exit(1)
 	}
-	_, err := s.Db.GetUser(context.Background(), cmd.Args[0])
+	u, err := s.Db.GetUser(context.Background(), cmd.Args[0])
 	if err != nil {
 		fmt.Println("User doesn't exist")
 		os.Exit(1)
 	}
 	newName := cmd.Args[0]
-	err = s.Config.SetUser(newName)
+	err = s.Config.SetUser(newName, u.ID)
 	if err != nil {
 		return err
 	}
-	fmt.Print("The user has been set.")
+	fmt.Println("The user has been set.")
 	return nil
 }
 
@@ -107,12 +106,12 @@ func HandlerRegister(s *State, cmd Command) error {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		Config.SetUser(*s.Config, dbUser.Name)
+		Config.SetUser(*s.Config, dbUser.Name, dbUser.ID)
 		fmt.Println("the user was created")
 		fmt.Println(user)
 		return nil
 	} else if err != nil {
-		fmt.Println("an error occured when getting user")
+		fmt.Println("an error occured when getting user", err)
 		os.Exit(1)
 	} else {
 		fmt.Println("user already exists")
@@ -186,6 +185,80 @@ func HandlerAddFeed(s *State, cmd Command) error {
 		UserID:    currentUser.ID,
 	}
 	dbFeed, err := s.Db.CreateFeed(context.Background(), feed)
-	fmt.Println(dbFeed)
+
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    s.Config.CurrentUserID,
+		FeedID:    dbFeed.ID,
+	}
+	feedRows, err := s.Db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		fmt.Println("Error when following feed", err)
+		os.Exit(1)
+	}
+	fmt.Printf("%v successfully added and followed %v", feedRows.UserName, feedRows.FeedName)
+	return nil
+}
+
+func HandlerFeeds(s *State, cmd Command) error {
+	feeds, err := s.Db.GetFeeds(context.Background())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if len(feeds) == 0 {
+		fmt.Println("no feeds")
+		os.Exit(1)
+	}
+	for _, feed := range feeds {
+		fmt.Printf("* %v, %v, %v\n", feed.Name, feed.Url, feed.Name_2)
+	}
+	os.Exit(0)
+	return nil
+}
+
+func HandlerFollow(s *State, cmd Command) error {
+	if len(cmd.Args) == 0 {
+		fmt.Println("Please input the URL of the feed you want to follow.")
+		os.Exit(1)
+	}
+	lookup, err := s.Db.FeedLookup(context.Background(), cmd.Args[0])
+	if lookup == (database.FeedLookupRow{}) {
+		fmt.Println("Feed not registered, add feed before you follow.")
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Println("An Error occured when looking up the feed.", err)
+		os.Exit(1)
+	}
+	params := database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    s.Config.CurrentUserID,
+		FeedID:    lookup.ID,
+	}
+	feedRows, err := s.Db.CreateFeedFollow(context.Background(), params)
+	if err != nil {
+		fmt.Println("Error when following feed", err)
+		os.Exit(1)
+	}
+	fmt.Printf("%v successfully followed %v", feedRows.UserName, feedRows.FeedName)
+	os.Exit(0)
+	return nil
+}
+
+func HandlerFollowing(s *State, cmd Command) error {
+	feedList, err := s.Db.CreateFeedFollowsForUser(context.Background(), s.Config.CurrentUserID)
+	if err != nil {
+		fmt.Println("an error occured with getting following list: ", err)
+		os.Exit(1)
+	}
+	for _, f := range feedList {
+		fmt.Printf("* %v - %v\n", f.FeedName, f.UserName)
+	}
+	os.Exit(0)
 	return nil
 }

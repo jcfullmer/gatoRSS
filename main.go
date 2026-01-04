@@ -16,12 +16,15 @@ func main() {
 	configState, _ := Config.GetState()
 	cmds := &Config.Commands{
 		Handlers: map[string]func(*Config.State, Config.Command) error{
-			"login":    Config.HandlerLogin,
-			"register": Config.HandlerRegister,
-			"reset":    Config.HandlerReset,
-			"users":    Config.HandlerUsers,
-			"agg":      Config.HandlerAgg,
-			"addfeed":  Config.HandlerAddFeed,
+			"login":     Config.HandlerLogin,
+			"register":  Config.HandlerRegister,
+			"reset":     Config.HandlerReset,
+			"users":     Config.HandlerUsers,
+			"agg":       Config.HandlerAgg,
+			"addfeed":   Config.HandlerAddFeed,
+			"feeds":     Config.HandlerFeeds,
+			"follow":    Config.HandlerFollow,
+			"following": Config.HandlerFollowing,
 		},
 	}
 	if len(os.Args) < 2 {
@@ -29,7 +32,6 @@ func main() {
 		os.Exit(1)
 	}
 	argInput := os.Args
-
 	db, err := sql.Open("postgres", configState.Config.DbURL)
 	dbQueries := database.New(db)
 	configState.Db = dbQueries

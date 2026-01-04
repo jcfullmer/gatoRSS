@@ -2,7 +2,10 @@ package Config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 const configFileName = ".gatorconfig.json"
@@ -16,11 +19,10 @@ func get_config_path() (string, error) {
 }
 
 type Config struct {
-	DbURL           string `json:"db_url"`
-	CurrentUserName string `json:"current_user_name"`
+	DbURL           string    `json:"db_url"`
+	CurrentUserName string    `json:"current_user_name"`
+	CurrentUserID   uuid.UUID `json:"current_user_id"`
 }
-
-
 
 func Read() (Config, error) {
 	conf_path, err := get_config_path()
@@ -49,11 +51,13 @@ func writeConfig(c Config) error {
 	return nil
 }
 
-func (c Config) SetUser(username string) error {
+func (c Config) SetUser(username string, id uuid.UUID) error {
 	c.CurrentUserName = username
+	c.CurrentUserID = id
 	err := writeConfig(c)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("Set user as %v With an ID of %v\n", c.CurrentUserName, c.CurrentUserID)
 	return nil
 }
