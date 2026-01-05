@@ -152,37 +152,37 @@ func HandlerUsers(s *State, _ Command) error {
 	return nil
 }
 
-func HandlerAgg(s *State, _ Command) error {
-	feedURL := "https://www.wagslane.dev/index.xml"
-	RSS, err := rss.FetchFeed(context.Background(), feedURL)
-	if err != nil {
-		fmt.Println("Error with FetchFeed func")
-		fmt.Println(err)
-		return err
+func HandlerAgg(s *State, cmd Command) error {
+	if len(cmd.Args) == 0 {
+		fmt.Println("Please input a time")
+		os.Exit(1)
 	}
-	fmt.Println(RSS)
-	return nil
+	time_between_regs, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		fmt.Println("error when parsing time between regs: ", err)
+		os.Exit(1)
+	}
+	fmt.Println("Collecting feeds every ", time_between_regs)
+	ticker := time.NewTicker(time_between_regs)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 }
 
-func HandlerAddFeed(s *State, cmd Command) error {
+func HandlerAddFeed(s *State, cmd Command, user database.User) error {
 	if len(cmd.Args) < 2 {
 		fmt.Println("not nough args, need name of feed and url")
 		os.Exit(1)
 	}
 	name := cmd.Args[0]
 	url := cmd.Args[1]
-
-	currentUser, err := s.Db.GetUser(context.Background(), s.Config.CurrentUserName)
-	if err != nil {
-		return err
-	}
 	feed := database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name:      name,
 		Url:       url,
-		UserID:    currentUser.ID,
+		UserID:    user.ID,
 	}
 	dbFeed, err := s.Db.CreateFeed(context.Background(), feed)
 
@@ -219,7 +219,7 @@ func HandlerFeeds(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollow(s *State, cmd Command) error {
+func HandlerFollow(s *State, cmd Command, user database.User) error {
 	if len(cmd.Args) == 0 {
 		fmt.Println("Please input the URL of the feed you want to follow.")
 		os.Exit(1)
@@ -237,7 +237,7 @@ func HandlerFollow(s *State, cmd Command) error {
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    s.Config.CurrentUserID,
+		UserID:    user.ID,
 		FeedID:    lookup.ID,
 	}
 	feedRows, err := s.Db.CreateFeedFollow(context.Background(), params)
@@ -250,8 +250,8 @@ func HandlerFollow(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollowing(s *State, cmd Command) error {
-	feedList, err := s.Db.CreateFeedFollowsForUser(context.Background(), s.Config.CurrentUserID)
+func HandlerFollowing(s *State, cmd Command, user database.User) error {
+	feedList, err := s.Db.CreateFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		fmt.Println("an error occured with getting following list: ", err)
 		os.Exit(1)
@@ -260,5 +260,89 @@ func HandlerFollowing(s *State, cmd Command) error {
 		fmt.Printf("* %v - %v\n", f.FeedName, f.UserName)
 	}
 	os.Exit(0)
+	return nil
+}
+
+func HandlerUnfollow(s *State, cmd Command, user database.User) error {
+	if len(cmd.Args) == 0 {
+		fmt.Println("Please input the URL of the feed you want to unfollow.")
+		os.Exit(1)
+	}
+	lookup, err := s.Db.FeedLookup(context.Background(), cmd.Args[0])
+	if lookup == (database.FeedLookupRow{}) {
+		fmt.Println("Feed not registered or followed.")
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Println("An Error occured when looking up the feed.", err)
+		os.Exit(1)
+	}
+	feedList, err := s.Db.CreateFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		fmt.Println("an error occured with getting following list: ", err)
+		os.Exit(1)
+	}
+	if len(feedList) == 0 {
+		fmt.Println("You are not following anyone.")
+		os.Exit(1)
+	}
+	for _, f := range feedList {
+		if lookup.ID == f.FeedID {
+			params := database.RemoveFeedFollowParams{
+				FeedID: lookup.ID,
+				UserID: user.ID,
+			}
+			if err = s.Db.RemoveFeedFollow(context.Background(), params); err != nil {
+				fmt.Println("An error occurred removing feed from database: ", err)
+				os.Exit(1)
+			}
+			fmt.Println("Removed feed successfully.")
+			os.Exit(0)
+			return nil
+		}
+	}
+	fmt.Println("You are not following that feed.")
+	os.Exit(1)
+	return fmt.Errorf("user not following given url")
+
+}
+
+func MiddlewareLoggedIn(
+	handler func(s *State, cmd Command, user database.User) error,
+) func(*State, Command) error {
+
+	return func(s *State, cmd Command) error {
+		user, err := s.Db.GetUser(context.Background(), s.Config.CurrentUserName)
+		if err != nil {
+			return err
+		}
+		return handler(s, cmd, user)
+	}
+}
+
+func scrapeFeeds(s *State) error {
+	feed, err := s.Db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		fmt.Println("error when getting next feed to fetch: ", err)
+		os.Exit(1)
+	}
+	params := database.MarkFeedFetchedParams{
+		UpdatedAt: time.Now(),
+		ID:        feed.ID,
+	}
+	if err = s.Db.MarkFeedFetched(context.Background(), params); err != nil {
+		fmt.Println("error when marking feed as fetched: ", err)
+	}
+	RSS, err := rss.FetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		fmt.Println("Error with FetchFeed func: ", err)
+		return err
+	}
+	fmt.Println(RSS.Channel.Title)
+	for _, item := range RSS.Channel.Item {
+		fmt.Printf("%v at %v:\n", item.Title, item.Link)
+		fmt.Println(item.Description)
+		fmt.Printf("Published at: %v\n", item.PubDate)
+	}
 	return nil
 }
