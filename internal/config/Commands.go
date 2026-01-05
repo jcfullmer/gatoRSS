@@ -317,7 +317,11 @@ func HandlerBrowse(s *State, cmd Command) error {
 			return err
 		}
 	}
-	posts, err := s.Db.GetPosts(context.Background(), int32(limit))
+	getPostParams := database.GetPostsParams{
+		UserID: s.Config.CurrentUserID,
+		Limit:  int32(limit),
+	}
+	posts, err := s.Db.GetPosts(context.Background(), getPostParams)
 	if err != nil {
 		fmt.Println("Error when getting posts: ", err)
 	}
