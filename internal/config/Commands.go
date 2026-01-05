@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -198,7 +199,7 @@ func HandlerAddFeed(s *State, cmd Command, user database.User) error {
 		fmt.Println("Error when following feed", err)
 		os.Exit(1)
 	}
-	fmt.Printf("%v successfully added and followed %v", feedRows.UserName, feedRows.FeedName)
+	fmt.Printf("%v successfully added and followed %v\n", feedRows.UserName, feedRows.FeedName)
 	return nil
 }
 
@@ -303,8 +304,30 @@ func HandlerUnfollow(s *State, cmd Command, user database.User) error {
 	}
 	fmt.Println("You are not following that feed.")
 	os.Exit(1)
-	return fmt.Errorf("user not following given url")
+	return fmt.Errorf("user not following given url\n")
 
+}
+
+func HandlerBrowse(s *State, cmd Command) error {
+	limit := 2
+	if len(cmd.Args) > 0 {
+		temp, err := strconv.Atoi(cmd.Args[0])
+		limit = temp
+		if err != nil {
+			return err
+		}
+	}
+	posts, err := s.Db.GetPosts(context.Background(), int32(limit))
+	if err != nil {
+		fmt.Println("Error when getting posts: ", err)
+	}
+	for _, post := range posts {
+		fmt.Printf("Title: %v\n", post.Title)
+		fmt.Printf("Description: %v\n", post.Description)
+		fmt.Printf("Published at: %v\n", post.PublishedAt)
+		fmt.Printf("Link for more details: %v\n", post.Url)
+	}
+	return nil
 }
 
 func MiddlewareLoggedIn(
@@ -338,11 +361,22 @@ func scrapeFeeds(s *State) error {
 		fmt.Println("Error with FetchFeed func: ", err)
 		return err
 	}
-	fmt.Println(RSS.Channel.Title)
 	for _, item := range RSS.Channel.Item {
-		fmt.Printf("%v at %v:\n", item.Title, item.Link)
-		fmt.Println(item.Description)
-		fmt.Printf("Published at: %v\n", item.PubDate)
+		publishedAt, err := time.Parse(time.RFC1123, item.PubDate)
+		if err != nil {
+			return err
+		}
+		PostParams := database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: item.Description,
+			PublishedAt: publishedAt,
+			FeedID:      feed.ID,
+		}
+		s.Db.CreatePost(context.Background(), PostParams)
 	}
 	return nil
 }

@@ -26,6 +26,7 @@ func main() {
 	cmds.Register("follow", Config.MiddlewareLoggedIn(Config.HandlerFollow))
 	cmds.Register("following", Config.MiddlewareLoggedIn(Config.HandlerFollowing))
 	cmds.Register("unfollow", Config.MiddlewareLoggedIn(Config.HandlerUnfollow))
+	cmds.Register("browse", Config.HandlerBrowse)
 	if len(os.Args) < 2 {
 		fmt.Print("No args")
 		os.Exit(1)
